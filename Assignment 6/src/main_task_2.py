@@ -25,6 +25,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def format_image(image: PIL.Image.Image) -> np.ndarray:
+    """
+    Formats the uploaded image to a 28x28 grayscale image and creates a serialized array of 784 elements.
+
+    Parameters:
+    - image (PIL.Image.Image): The uploaded image.
+
+    Returns:
+    - np.ndarray: The formatted image as a serialized array of 784 elements.
+    """
+    # Convert the image to grayscale
+    image = image.convert("L")
+    
+    # Invert the image
+    image = 255 - np.array(image)
+    
+    # Convert the image to a numpy array
+    image = np.array(image)
+    
+    # Pad the image with zeros
+    padded_image = np.pad(image, ((1, 1), (8, 8)), mode='constant', constant_values=0)
+    
+    # Print the shape of the padded image
+    print(padded_image.shape)
+    
+    # Create a new array to store the processed image
+    new_array = []
+    
+    # Iterate over each pixel in the image
+    for i in range(28):
+        row = []
+        for j in range(28):
+            # Take the maximum value in each 7x7 block of pixels
+            row.append(np.max(padded_image[7*i:7*i+7, 7*j:7*j+7]))
+        new_array.append(row)
+    
+    # Convert the new array to a numpy array
+    new_array = np.array(new_array)
+    
+    # Threshold the image to convert it to black and white
+    new_array = np.where(new_array > 40, 255, 0)
+    
+    # Return the processed image
+    return new_array
 
 def load_model(path: str) -> Sequential:
     """
@@ -66,9 +110,21 @@ def predict_digit(model: Sequential, image: list) -> str:
     - str: The predicted digit as a string.
     """
     return str(int(np.argmax(model.predict(np.array(image).reshape(1, 784)))))
+
+
 def predict_digit(model: Sequential, image: list) -> str:
-    
-    return int(np.argmax(model.predict(np.array(image).reshape(1, 784))))
+    """
+    Predicts the digit in the given image using the specified model.
+
+    Parameters:
+    - model (Sequential): The trained model used for prediction.
+    - image (list): The image data as a list.
+
+    Returns:
+    - str: The predicted digit as a string.
+    """
+    return str(int(np.argmax(model.predict(np.array(image).reshape(1, 784)))))
+
 
 
 app = FastAPI()
@@ -102,9 +158,7 @@ async def predict(file: UploadFile = File(...)):
     """
     contents = await file.read()
     pil_image = PIL.Image.open(io.BytesIO(contents))
-    pil_image = pil_image.resize((28, 28))
-    image_array = np.array(pil_image).reshape(1, -1)
-    
+    image_array = format_image(pil_image)
     model = load_model("../models/model2.pkl")
     digit = predict_digit(model, image_array)
     return {"digit": digit}
